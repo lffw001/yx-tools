@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"embed"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -12,10 +11,6 @@ import (
 	"time"
 )
 
-//go:embed all:web
-var webFS embed.FS
-
-// Server 提供 Web 图形界面与 REST 接口
 type Server struct {
 	runner *Runner
 	mux    *http.ServeMux
@@ -27,11 +22,9 @@ var (
 )
 
 func init() {
-	// 启动时获取一次公网IP，后续复用
 	publicIPv4, publicIPv6 = PublicIPs()
 }
 
-// NewServer 构造 Web 服务
 func NewServer() *Server {
 	s := &Server{runner: NewRunner(), mux: http.NewServeMux()}
 	s.routes()
@@ -59,7 +52,6 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/proxy-import", s.handleProxyImport)
 }
 
-// ServeHTTP 实现 http.Handler
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.ServeHTTP(w, r) }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
@@ -80,7 +72,6 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		c := LoadConfig()
-		// 凭据只回传是否已设置，不回显明文
 		writeJSON(w, http.StatusOK, map[string]any{
 			"worker_domain":    c.WorkerDomain,
 			"uuid":             c.UUID,
@@ -196,7 +187,6 @@ func (s *Server) handleStart(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusConflict, "已有测速任务在运行")
 		return
 	}
-	// 记住这次参数，下次打开界面自动回填
 	c := LoadConfig()
 	c.Colo, c.IPv6, c.Count = o.Colo, o.IPv6, o.Count
 	c.SpeedLimit, c.DelayLimit, c.Threads = o.SpeedLimit, o.DelayLimit, o.Threads
@@ -357,25 +347,18 @@ func (s *Server) handleUploadGitHub(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"count": n})
 }
 
-// handleSystem 返回运行环境信息，供界面展示本机IP和公网IP
 func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
-		"cron_supported": CronSupported(),
-		"self_path":      SelfPath(),
-		"result_file":    ResultFile,
-		"proxy_file":     ProxyListFile,
-		"default_url":    DefaultTestURL,
-		"local_ipv4":     LocalIPv4(),
-		"local_ipv6":     LocalIPv6(),
-		"public_ipv4":    publicIPv4,
-		"public_ipv6":    publicIPv6,
-	})
+	info, err := SystemInfo()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, info)
 }
 
-// handleCron 管理定时任务
 func (s *Server) handleCron(w http.ResponseWriter, r *http.Request) {
 	if !CronSupported() {
-		writeErr(w, http.StatusNotImplemented, "当前系统不支持 crontab，请用系统自带的计划任务")
+		writeErr(w, http.StatusNotImplemented, "当前系统不支持 crontab")
 		return
 	}
 	switch r.Method {
@@ -390,7 +373,6 @@ func (s *Server) handleCron(w http.ResponseWriter, r *http.Request) {
 			out = append(out, map[string]string{"schedule": j.Schedule, "command": j.Command})
 		}
 		writeJSON(w, http.StatusOK, out)
-
 	case http.MethodPost:
 		var in struct {
 			Schedule string `json:"schedule"`
@@ -406,14 +388,12 @@ func (s *Server) handleCron(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		self := SelfPath()
-		cmd := fmt.Sprintf("cd %s && %s %s >> yx-cron.log 2>&1",
-			shellQuote(DataDir()), shellQuote(self), in.Args)
+		cmd := fmt.Sprintf("cd %s && %s %s >> yx-cron.log 2>&1", shellQuote(DataDir()), shellQuote(self), in.Args)
 		if err := AddCronJob(in.Schedule, cmd, in.Replace); err != nil {
 			writeErr(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "command": cmd})
-
 	case http.MethodDelete:
 		n, err := RemoveCronJobs()
 		if err != nil {
@@ -421,13 +401,11 @@ func (s *Server) handleCron(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"count": n})
-
 	default:
 		writeErr(w, http.StatusMethodNotAllowed, "不支持的方法")
 	}
 }
 
-// handleProxyImport 接收一份外部 CSV 或 IP:端口 文本，生成反代列表。
 func (s *Server) handleProxyImport(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeErr(w, http.StatusMethodNotAllowed, "请用 POST")
@@ -454,7 +432,6 @@ func (s *Server) handleProxyImport(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"count": n, "file": ProxyListFile})
 }
 
-// handleDownload 下载测速结果或反代列表
 func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	kind := r.URL.Query().Get("kind")
 	var name string
@@ -474,7 +451,6 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(data)
 }
 
-// shellQuote 给含空格的路径加引号
 func shellQuote(s string) string {
 	if strings.ContainsAny(s, " \t") {
 		return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
