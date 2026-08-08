@@ -29,6 +29,7 @@ const usage = `Cloudflare 优选 IP 测速工具 v%s
   yx test [选项]            命令行测速
   yx proxy [选项]           优选反代：从 CSV 提取 IP:端口，可接着重测
   yx upload [选项]          上报已有结果
+  yx ip                     显示本机 IPv4/IPv6 和公网 IP 地址
   yx cron [选项]            管理定时任务（Linux/macOS）
 
 测速选项 (test):
@@ -95,6 +96,8 @@ func main() {
 		runUpload(os.Args[2:])
 	case "cron":
 		runCron(os.Args[2:])
+	case "ip":
+        app.PrintLocalIPs()
 	case "-v", "--version", "version":
 		fmt.Printf("yx v%s\n", version)
 	case "-h", "--help", "help":
