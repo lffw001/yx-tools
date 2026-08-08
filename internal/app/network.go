@@ -1,7 +1,6 @@
 package app
 
 import (
-	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -17,7 +16,6 @@ func LocalIPs() (ipv4, ipv6 []string) {
 		return
 	}
 	for _, iface := range interfaces {
-		// 跳过回环、down、虚拟网卡
 		if iface.Flags&net.FlagLoopback != 0 ||
 			iface.Flags&net.FlagUp == 0 ||
 			isVirtualInterface(iface.Name) {
@@ -38,35 +36,28 @@ func LocalIPs() (ipv4, ipv6 []string) {
 			if ip == nil {
 				continue
 			}
-			// 过滤回环和私有/链路本地地址（除非明确要求）
 			if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
 				continue
 			}
-			// 清理前缀
-			ip = ip.To4()
-			if ip == nil {
-				// IPv6
-				normalized := ip.String()
-				// 去掉压缩的零段，方便阅读
-				if isIPv6Unique(normalized, &ipv6) {
-					ipv6 = append(ipv6, normalized)
-				}
-			} else {
-				// IPv4
-				normalized := ip.String()
+			// 修复：用 ip4 暂存 IPv4 结果，避免 ip 被置 nil 后调用 ip.String() panic
+			if ip4 := ip.To4(); ip4 != nil {
+				normalized := ip4.String()
 				if isIPv4Unique(normalized, &ipv4) {
 					ipv4 = append(ipv4, normalized)
+				}
+			} else {
+				normalized := ip.String()
+				if isIPv6Unique(normalized, &ipv6) {
+					ipv6 = append(ipv6, normalized)
 				}
 			}
 		}
 	}
-	// 排序让输出更稳定
 	sort.Strings(ipv4)
 	sort.Strings(ipv6)
 	return
 }
 
-// isIPv4Unique 去重（同一 IP 可能出现在多个网卡上）
 func isIPv4Unique(ip string, existing *[]string) bool {
 	for _, v := range *existing {
 		if v == ip {
@@ -76,7 +67,6 @@ func isIPv4Unique(ip string, existing *[]string) bool {
 	return true
 }
 
-// isIPv6Unique IPv6 去重，规范化后比较
 func isIPv6Unique(ip string, existing *[]string) bool {
 	for _, v := range *existing {
 		if normalizeIPv6(v) == normalizeIPv6(ip) {
@@ -86,7 +76,6 @@ func isIPv6Unique(ip string, existing *[]string) bool {
 	return true
 }
 
-// normalizeIPv6 将 IPv6 地址规范化（全小写、去掉前导零、压缩零段）
 func normalizeIPv6(s string) string {
 	ip := net.ParseIP(s)
 	if ip == nil {
@@ -95,14 +84,11 @@ func normalizeIPv6(s string) string {
 	return ip.String()
 }
 
-// isVirtualInterface 判断是否为虚拟网卡（Docker、VPN、虚拟机等）
 func isVirtualInterface(name string) bool {
-	// 常见虚拟网卡前缀
 	prefixes := []string{
-		"docker", "veth", "br-",       // Docker
-		"virbr", "vnet", "tap", "tun", // KVM/QEMU
-		"vpn", "wg", "wlan",            // VPN/WireGuard
-		"lo",                           // 回环已在上面过滤
+		"docker", "veth", "br-",
+		"virbr", "vnet", "tap", "tun",
+		"vpn", "wg", "wlan",
 	}
 	name = lower(name)
 	for _, p := range prefixes {
@@ -120,7 +106,6 @@ func lower(s string) string {
 	return s
 }
 
-// LocalIPv4 返回本机所有有效 IPv4 地址（逗号分隔）
 func LocalIPv4() string {
 	ipvs, _ := LocalIPs()
 	if len(ipvs) == 0 {
@@ -129,22 +114,12 @@ func LocalIPv4() string {
 	return joinStrings(ipvs)
 }
 
-// LocalIPv6 返回本机所有有效 IPv6 地址（逗号分隔）
 func LocalIPv6() string {
 	_, ipvs := LocalIPs()
 	if len(ipvs) == 0 {
 		return ""
 	}
 	return joinStrings(ipvs)
-}
-
-// LocalIPInfo 返回本机的网络信息，供 JSON 序列化
-func LocalIPInfo() map[string]string {
-	ipv4, ipv6 := LocalIPs()
-	return map[string]string{
-		"ipv4": joinStrings(ipv4),
-		"ipv6": joinStrings(ipv6),
-	}
 }
 
 func joinStrings(ss []string) string {
@@ -160,7 +135,6 @@ func joinStrings(ss []string) string {
 
 // PublicIPs 获取公网 IPv4 和 IPv6 地址
 func PublicIPs() (ipv4, ipv6 string) {
-	// 使用多个服务以提高可靠性
 	services := []struct {
 		url  string
 		ipv6 bool
@@ -198,18 +172,15 @@ func PublicIPs() (ipv4, ipv6 string) {
 			continue
 		}
 
-		// 验证是否为合法的IP地址
 		parsedIP := net.ParseIP(ip)
 		if parsedIP == nil {
 			continue
 		}
 
-		// 验证IP类型是否与预期一致
 		isIPv4 := parsedIP.To4() != nil
 		isIPv6 := !isIPv4
 
 		if svc.ipv6 {
-			// 请求IPv6，但返回的是IPv4，跳过
 			if !isIPv6 {
 				continue
 			}
@@ -217,7 +188,6 @@ func PublicIPs() (ipv4, ipv6 string) {
 				ipv6 = ip
 			}
 		} else {
-			// 请求IPv4，但返回的是IPv6，跳过
 			if !isIPv4 {
 				continue
 			}
@@ -232,13 +202,4 @@ func PublicIPs() (ipv4, ipv6 string) {
 	}
 
 	return
-}
-
-// PublicIPInfo 返回公网IP信息，供 JSON 序列化
-func PublicIPInfo() map[string]string {
-	ipv4, ipv6 := PublicIPs()
-	return map[string]string{
-		"ipv4": ipv4,
-		"ipv6": ipv6,
-	}
 }
