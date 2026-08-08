@@ -15,6 +15,8 @@
   </div>
   <div class="topbar-right">
     <span class="stat" id="statResult">结果 0</span>
+    <span class="stat ip-display" id="ipDisplay" title="本机 IP 地址"></span>
+    <span class="stat pub-ip-display" id="pubIpDisplay" title="公网 IP 地址"></span>
     <button class="btn ghost" id="btnCron" title="定时任务">
       <svg viewBox="0 0 24 24" class="ico"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
     </button>
@@ -117,18 +119,6 @@
           </span>
           <em id="ipFileName"></em>
         </label>
-      </div>
-      <div class="grid2">
-        <div class="field">
-          <label>单个 IP 测速上限</label>
-          <input type="number" id="inDLTimeout" value="10" min="1" max="120">
-          <em class="note">秒。慢的 IP 到点就跳过，不会一直耗着</em>
-        </div>
-        <div class="field">
-          <label>整轮时间上限</label>
-          <input type="number" id="inMaxRun" value="0" min="0" max="86400">
-          <em class="note">秒。0 是不限；到点就拿已测出的结果收工</em>
-        </div>
       </div>
 
     </details>
@@ -235,10 +225,10 @@
 <div class="mask hidden" id="proxyMask">
   <div class="modal">
     <h3>优选反代</h3>
-    <em class="note">拿现成的 IP 列表来测：FOFA 导出的资产 CSV、别人分享的测速 CSV，或每行 IP:端口 的纯列表。CSV 只读 ip 和 port 两列，其他列不管</em>
+    <em class="note">拿现成的 IP 列表来测：可以是别人分享的测速 CSV，也可以是每行 IP:端口 的纯列表</em>
     <div class="field">
       <label>IP 来源 <span class="hint" id="proxyCount"></span></label>
-      <textarea id="proxyText" rows="7" placeholder="104.20.18.132:443&#10;172.70.96.220:2053&#10;&#10;或直接粘贴带 ip,port 列的 CSV"></textarea>
+      <textarea id="proxyText" rows="7" placeholder="104.20.18.132:443&#10;172.70.96.220:2053&#10;&#10;或直接粘贴 result.csv 的内容"></textarea>
       <label class="filepick">
         <input type="file" id="proxyFile" accept=".txt,.csv,text/plain" hidden>
         <span class="btn ghost sm">
