@@ -2,24 +2,23 @@ package app
 
 import (
 	"context"
+	"os"
+	"os/exec"
 	"sync"
 	"time"
 )
 
-// Event 是推送给界面的一条运行事件
 type Event struct {
-	Type     string   `json:"type"` // progress / log / done / error
+	Type     string   `json:"type"`
 	Stage    string   `json:"stage,omitempty"`
 	Message  string   `json:"message,omitempty"`
 	Current  int      `json:"current,omitempty"`
 	Total    int      `json:"total,omitempty"`
 	Results  []Result `json:"results,omitempty"`
-	Result   *Result  `json:"result,omitempty"` // 下载测速逐条出结果时带上
 	Finished bool     `json:"finished"`
 	At       int64    `json:"at"`
 }
 
-// Runner 串行调度测速任务，并把过程广播给所有订阅者
 type Runner struct {
 	mu       sync.RWMutex
 	running  bool
@@ -30,12 +29,10 @@ type Runner struct {
 	lastOpts Options
 }
 
-// NewRunner 创建调度器
 func NewRunner() *Runner {
 	return &Runner{subs: make(map[chan Event]struct{})}
 }
 
-// Subscribe 订阅事件流，返回通道与退订函数；已有历史会先回放
 func (r *Runner) Subscribe() (<-chan Event, func()) {
 	ch := make(chan Event, 64)
 	r.mu.Lock()
@@ -64,28 +61,21 @@ func (r *Runner) broadcast(e Event) {
 	if len(r.history) > 200 {
 		r.history = r.history[len(r.history)-200:]
 	}
-	// 逐条结果同时累积到 results，这样中途刷新页面也能
-	// 通过 /api/results 拿到已经测出来的部分
-	if e.Type == "result" && e.Result != nil {
-		r.results = append(r.results, *e.Result)
-	}
 	for ch := range r.subs {
 		select {
 		case ch <- e:
-		default: // 订阅者太慢就丢事件，不阻塞测速
+		default:
 		}
 	}
 	r.mu.Unlock()
 }
 
-// Running 返回是否有任务在跑
 func (r *Runner) Running() bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.running
 }
 
-// Results 返回最近一次测速结果
 func (r *Runner) Results() []Result {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -94,7 +84,6 @@ func (r *Runner) Results() []Result {
 	return out
 }
 
-// LastStage 返回最近一次进度事件的阶段名
 func (r *Runner) LastStage() string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -106,14 +95,12 @@ func (r *Runner) LastStage() string {
 	return ""
 }
 
-// LastOptions 返回最近一次使用的参数
 func (r *Runner) LastOptions() Options {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.lastOpts
 }
 
-// Start 启动一次测速；已有任务在跑时返回 false
 func (r *Runner) Start(o Options) bool {
 	r.mu.Lock()
 	if r.running {
@@ -124,7 +111,6 @@ func (r *Runner) Start(o Options) bool {
 	r.running = true
 	r.cancel = cancel
 	r.history = nil
-	r.results = nil // 上一轮的结果别串到这一轮
 	r.lastOpts = o
 	r.mu.Unlock()
 
@@ -137,11 +123,6 @@ func (r *Runner) Start(o Options) bool {
 			cancel()
 		}()
 		rs, err := Run(ctx, o, func(p Progress) {
-			if p.Result != nil {
-				// 单条结果单独发一种事件，前端可以立刻插进表格
-				r.broadcast(Event{Type: "result", Stage: p.Stage, Result: p.Result})
-				return
-			}
 			r.broadcast(Event{Type: "progress", Stage: p.Stage, Message: p.Message, Current: p.Current, Total: p.Total})
 		})
 		if err != nil {
@@ -163,7 +144,6 @@ func (r *Runner) Start(o Options) bool {
 	return true
 }
 
-// Cancel 取消当前任务
 func (r *Runner) Cancel() {
 	r.mu.RLock()
 	c := r.cancel
@@ -171,4 +151,23 @@ func (r *Runner) Cancel() {
 	if c != nil {
 		c()
 	}
+}
+
+func SystemInfo() (map[string]any, error) {
+	selfPath, _ := os.Executable()
+	cronSupported := false
+	if _, err := exec.LookPath("crontab"); err == nil {
+		cronSupported = true
+	}
+	return map[string]any{
+		"cron_supported": cronSupported,
+		"self_path":      selfPath,
+		"result_file":    ResultFile,
+		"proxy_file":     ProxyListFile,
+		"default_url":    DefaultTestURL,
+		"local_ipv4":     LocalIPv4(),
+		"local_ipv6":     LocalIPv6(),
+		"public_ipv4":    publicIPv4,
+		"public_ipv6":    publicIPv6,
+	}, nil
 }
