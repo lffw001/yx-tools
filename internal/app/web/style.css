@@ -24,6 +24,10 @@ body{
 @keyframes pulse{50%{opacity:.35}}
 .topbar-right{display:flex;align-items:center;gap:10px}
 .stat{font-family:var(--mono);font-size:12px;color:var(--ink2)}
+.ip-display{max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  border-left:1px solid var(--line);padding-left:10px;margin-left:2px}
+.pub-ip-display{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  border-left:1px solid var(--line);padding-left:10px;margin-left:2px;color:var(--ok)}
 
 /* 布局 */
 .layout{flex:1;display:grid;grid-template-columns:288px 1fr;min-height:0}
