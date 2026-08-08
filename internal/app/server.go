@@ -21,6 +21,16 @@ type Server struct {
 	mux    *http.ServeMux
 }
 
+var (
+	publicIPv4 string
+	publicIPv6 string
+)
+
+func init() {
+	// 启动时获取一次公网IP，后续复用
+	publicIPv4, publicIPv6 = PublicIPs()
+}
+
 // NewServer 构造 Web 服务
 func NewServer() *Server {
 	s := &Server{runner: NewRunner(), mux: http.NewServeMux()}
@@ -88,8 +98,6 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 			"httping":          c.HTTPing,
 			"disable_dl":       c.DisableDL,
 			"port":             c.Port,
-			"dl_timeout":       c.DLTimeout,
-			"max_runtime":      c.MaxRunTime,
 		})
 	case http.MethodPost:
 		cur := LoadConfig()
@@ -194,7 +202,6 @@ func (s *Server) handleStart(w http.ResponseWriter, r *http.Request) {
 	c.SpeedLimit, c.DelayLimit, c.Threads = o.SpeedLimit, o.DelayLimit, o.Threads
 	c.TestURL, c.Port = o.TestURL, o.Port
 	c.SampleSize, c.HTTPing, c.DisableDL = o.SampleSize, o.HTTPing, o.DisableDL
-	c.DLTimeout, c.MaxRunTime = o.DLTimeout, o.MaxRunTime
 	_ = SaveConfig(c)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -350,7 +357,7 @@ func (s *Server) handleUploadGitHub(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"count": n})
 }
 
-// handleSystem 返回运行环境信息，供界面决定展示哪些功能
+// handleSystem 返回运行环境信息，供界面展示本机IP和公网IP
 func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"cron_supported": CronSupported(),
@@ -358,6 +365,10 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 		"result_file":    ResultFile,
 		"proxy_file":     ProxyListFile,
 		"default_url":    DefaultTestURL,
+		"local_ipv4":     LocalIPv4(),
+		"local_ipv6":     LocalIPv6(),
+		"public_ipv4":    publicIPv4,
+		"public_ipv6":    publicIPv6,
 	})
 }
 
@@ -417,7 +428,6 @@ func (s *Server) handleCron(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleProxyImport 接收一份外部 CSV 或 IP:端口 文本，生成反代列表。
-// 对应旧 Python 版的优选反代第一步：把别人分享的结果转成可测的列表。
 func (s *Server) handleProxyImport(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeErr(w, http.StatusMethodNotAllowed, "请用 POST")
