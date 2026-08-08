@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// PrintLocalIPs 在命令行打印本机和本地 IP 地址
+// PrintLocalIPs 在命令行打印本机 IPv4/IPv6 地址
 func PrintLocalIPs() {
 	ipv4, ipv6 := LocalIPs()
 
