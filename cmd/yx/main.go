@@ -306,7 +306,6 @@ func doUpload(ctx context.Context, uf uploadFlags, rs []app.Result) {
 }
 
 // ── 优选反代 ──────────────────────────────────────
-// 从任意测速 CSV 提取 IP:端口 生成列表，可接着拿这份列表重测一遍。
 func runProxy(args []string) {
 	fs := flag.NewFlagSet("proxy", flag.ExitOnError)
 	in := fs.String("i", app.ResultFile, "来源 CSV，可以是别人分享的结果")
@@ -404,7 +403,6 @@ func runCron(args []string) {
 		fmt.Printf("已清除 %d 条定时任务\n", n)
 
 	case *add != "":
-		// 用绝对路径，并切到数据目录，保证结果文件落在能写的位置
 		self := app.SelfPath()
 		dir := app.DataDir()
 		cmd := fmt.Sprintf("cd %s && %s %s >> yx-cron.log 2>&1", quote(dir), quote(self), *add)
@@ -434,7 +432,6 @@ func runCron(args []string) {
 	}
 }
 
-// quote 给路径加引号，避免空格截断
 func quote(s string) string {
 	if strings.ContainsAny(s, " \t") {
 		return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
