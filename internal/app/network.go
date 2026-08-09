@@ -39,7 +39,6 @@ func LocalIPs() (ipv4, ipv6 []string) {
 			if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
 				continue
 			}
-			// 修复：用 ip4 暂存 IPv4 结果，避免 ip 被置 nil 后调用 ip.String() panic
 			if ip4 := ip.To4(); ip4 != nil {
 				normalized := ip4.String()
 				if isIPv4Unique(normalized, &ipv4) {
