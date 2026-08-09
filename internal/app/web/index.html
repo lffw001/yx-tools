@@ -15,8 +15,27 @@
   </div>
   <div class="topbar-right">
     <span class="stat" id="statResult">结果 0</span>
-<span class="stat ip-display" id="ipDisplay" title="本机 IP 地址"></span>
-<span class="stat pub-ip-display" id="pubIpDisplay" title="公网 IP 地址"></span>
+    <div class="ip-bar" id="ipBar">
+      <div class="ip-trigger" id="ipTrigger">
+        <span class="ip-label">本机 IP</span>
+        <span class="ip-summary" id="ipSummary">未获取</span>
+        <svg class="ico ip-caret" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="ip-dropdown hidden" id="ipDropdown">
+        <div class="ip-section">
+          <div class="ip-section-title">本机 IPv4</div>
+          <div class="ip-list" id="ipV4List"></div>
+        </div>
+        <div class="ip-section">
+          <div class="ip-section-title">本机 IPv6</div>
+          <div class="ip-list" id="ipV6List"></div>
+        </div>
+        <div class="ip-section">
+          <div class="ip-section-title">公网 IP</div>
+          <div class="ip-list" id="pubIpList"></div>
+        </div>
+      </div>
+    </div>
     <button class="btn ghost" id="btnCron" title="定时任务">
       <svg viewBox="0 0 24 24" class="ico"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
     </button>
