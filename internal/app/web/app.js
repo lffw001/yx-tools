@@ -775,3 +775,62 @@ function toggleIpDropdown(force) {
       $('#proxyText').value = String(reader.result);
       $('#proxyFileName').textContent = f.name;
       updateProxyCount();
+    };
+    reader.onerror = () => toast('读取文件失败', 'err');
+    reader.readAsText(f);
+  });
+  $('#btnUploadAPI').onclick = uploadAPI;
+  $('#btnUploadGH').onclick = uploadGitHub;
+  $('#btnDownload').onclick = () => download('result');
+
+  $('#inIPFile').addEventListener('change', e => {
+    importIPFile(e.target.files && e.target.files[0]);
+    e.target.value = '';
+  });
+
+  $('#btnCron').onclick = openCron;
+  $('#btnCronClose').onclick = () => $('#cronMask').classList.add('hidden');
+  $('#cronMask').onclick = e => { if (e.target === $('#cronMask')) $('#cronMask').classList.add('hidden'); };
+
+  // IP 下拉触发器：点击切换，点击外部关闭
+  $('#ipTrigger').onclick = e => { e.stopPropagation(); toggleIpDropdown(); };
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.ip-bar')) toggleIpDropdown(false);
+  });
+  $('#btnCronAdd').onclick = addCron;
+  $('#cronArgs').addEventListener('input', e => {
+    e.target.dataset.edited = e.target.value.trim() ? '1' : '';
+    $('#btnCronSync').classList.toggle('hidden', !e.target.dataset.edited);
+  });
+  $('#btnCronSync').onclick = () => {
+    $('#cronArgs').value = buildCronArgs();
+    delete $('#cronArgs').dataset.edited;
+    $('#btnCronSync').classList.add('hidden');
+    toast('已按当前设置重新生成', 'ok');
+  };
+  $('#btnCronRemove').onclick = removeCron;
+  document.querySelectorAll('#cronPresets button').forEach(b => {
+    b.onclick = () => {
+      document.querySelectorAll('#cronPresets button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+      $('#cronSchedule').value = b.dataset.cron;
+    };
+  });
+  $('#cronSchedule').addEventListener('input', () => {
+    document.querySelectorAll('#cronPresets button').forEach(b =>
+      b.classList.toggle('on', b.dataset.cron === $('#cronSchedule').value.trim()));
+  });
+
+  try { state.system = await api('/api/system') || {}; } catch (_) {}
+  if (!state.system.cron_supported) $('#btnCron').classList.add('hidden');
+  // 显示本机 IP（可滚动下拉看全部）
+  renderIpDisplay(state.system);
+
+  await loadConfig();
+  try {
+    const st = await api('/api/status');
+    if (st.running) { setRunning(true); }
+    if (st.count) { state.results = await api('/api/results'); renderTable(); }
+  } catch (_) {}
+  connectEvents();
+})();
