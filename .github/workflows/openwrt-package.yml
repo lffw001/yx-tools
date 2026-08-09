@@ -37,7 +37,7 @@ jobs:
           - arch: arm_cortex-a9-vfpv3
             goos: linux
             goarch: arm
-            goarm: "8"
+            goarm: "7"
           - arch: mips_24kc
             goos: linux
             goarch: mips
@@ -82,7 +82,6 @@ jobs:
           
           echo "Building binary for $ARCH (GOOS=$GOOS GOARCH=$GOARCH GOARM=$GOARM)"
           
-          # 设置编译参数
           export CGO_ENABLED=0
           export GOOS=$GOOS
           export GOARCH=$GOARCH
@@ -90,10 +89,8 @@ jobs:
             export GOARM=$GOARM
           fi
           
-          # 编译
           go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o yx ./cmd/yx
           
-          # 验证
           chmod +x yx
           ./yx version || true
           echo "Binary built successfully:"
@@ -104,23 +101,17 @@ jobs:
           VERSION=${{ steps.version.outputs.version }}
           ARCH=${{ matrix.arch }}
           
-          echo "Setting up OpenWrt package for $ARCH version $VERSION"
-          
-          # 创建目录结构
           mkdir -p package/yx-tools/files/www
           mkdir -p package/yx-tools/files/etc/init.d
           mkdir -p package/yx-tools/files/etc/config
           
-          # 复制二进制文件
           cp yx package/yx-tools/files/yx
           chmod 755 package/yx-tools/files/yx
           
-          # 复制 web 界面文件
           if [ -d "internal/app/web" ]; then
             cp -r internal/app/web/* package/yx-tools/files/www/
           fi
           
-          # 创建 init 脚本
           cat > package/yx-tools/files/etc/init.d/yx-tools << 'INITEOF'
           #!/bin/sh /etc/rc.common
           # Copyright (C) 2024 byJoey
@@ -181,19 +172,14 @@ jobs:
           INITEOF
           chmod 755 package/yx-tools/files/etc/init.d/yx-tools
           
-          # 创建配置文件
           cat > package/yx-tools/files/etc/config/yx-tools << 'CONFEOF'
           config global 'global'
-              # 启动模式: web(网页界面) 或 test(命令行测速)
               option start_mode 'web'
-              # Web界面监听地址 (仅web模式有效)
               option listen_addr '0.0.0.0:8080'
-              # 额外的启动参数
               option start_args ''
           CONFEOF
           chmod 644 package/yx-tools/files/etc/config/yx-tools
           
-          # 创建 Makefile
           cat > package/yx-tools/Makefile << MAKEEOF
           # SPDX-License-Identifier: GPL-2.0-only
           #
@@ -264,18 +250,13 @@ jobs:
           VERSION=${{ steps.version.outputs.version }}
           ARCH=${{ matrix.arch }}
           
-          echo "Building ipk package for $ARCH"
-          
-          # 创建临时构建目录
           BUILD_DIR=$(mktemp -d)
           PKG_NAME="yx-tools_${VERSION}_openwrt_${ARCH}.ipk"
           
-          # 创建 ipk 结构
           CONTROL_DIR="$BUILD_DIR/control"
           DATA_DIR="$BUILD_DIR/data"
           mkdir -p "$CONTROL_DIR" "$DATA_DIR"
           
-          # 创建 control 文件
           cat > "$CONTROL_DIR/control" << EOF
           Package: yx-tools
           Version: ${VERSION}-1
@@ -292,7 +273,6 @@ jobs:
           Description: Cloudflare优选IP测速工具，支持CLI和Web界面。
           EOF
           
-          # 复制文件到 data 目录
           mkdir -p "$DATA_DIR/usr/bin"
           mkdir -p "$DATA_DIR/etc/init.d"
           mkdir -p "$DATA_DIR/etc/config"
@@ -309,27 +289,21 @@ jobs:
           
           cp -r package/yx-tools/files/www/* "$DATA_DIR/usr/share/yx-tools/"
           
-          # 创建 data.tar.gz
           cd "$DATA_DIR"
           tar -czf "$BUILD_DIR/data.tar.gz" .
           cd "$BUILD_DIR"
           
-          # 创建 control.tar.gz
           cd "$CONTROL_DIR"
           tar -czf "$BUILD_DIR/control.tar.gz" .
           cd "$BUILD_DIR"
           
-          # 创建 ipk (使用 tar 代替 ar)
           echo "2.0" > "$BUILD_DIR/debian-binary"
           cd "$BUILD_DIR"
-          # 使用 tar 创建 ipk (ipk 本质就是一个 tar.gz)
           tar -czf "$PKG_NAME" --transform="s,^,./," debian-binary control.tar.gz data.tar.gz
           
-          # 移动到 artifacts
           mkdir -p artifacts
           mv "$PKG_NAME" artifacts/
           
-          # 清理
           rm -rf "$BUILD_DIR"
           
           echo "PKG_NAME=$PKG_NAME" >> $GITHUB_ENV
