@@ -619,6 +619,91 @@ async function removeCron() {
 }
 
 // ── 初始化 ────────────────────────────────────────
+// IP 显示：顶栏摘要 + 下拉滚动看全部
+// 解析 "a,b,c" 为 ["a","b","c"]，处理多个 IP 逗号分隔的情况
+function splitIPs(s) {
+  if (!s) return [];
+  return String(s).split(',').map(x => x.trim()).filter(Boolean);
+}
+
+function appendIpRow(listEl, tag, tagClass, addr) {
+  if (!addr) return;
+  const row = document.createElement('div');
+  row.className = 'ip-row';
+  const t = document.createElement('span');
+  t.className = 'ip-tag ' + tagClass;
+  t.textContent = tag;
+  const a = document.createElement('span');
+  a.className = 'ip-addr';
+  a.textContent = addr;
+  const btn = document.createElement('button');
+  btn.className = 'ip-copy-btn';
+  btn.textContent = '⧉';
+  btn.title = '复制 ' + addr;
+  btn.onclick = e => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(addr).then(
+      () => toast('已复制 ' + addr, 'ok'),
+      () => toast('复制失败', 'err')
+    );
+  };
+  row.appendChild(t);
+  row.appendChild(a);
+  row.appendChild(btn);
+  row.onclick = () => {
+    navigator.clipboard.writeText(addr).then(
+      () => toast('已复制 ' + addr, 'ok'),
+      () => toast('复制失败', 'err')
+    );
+  };
+  listEl.appendChild(row);
+}
+
+function renderIpDisplay(sys) {
+  const v4s = splitIPs(sys.local_ipv4);
+  const v6s = splitIPs(sys.local_ipv6);
+  const pubV4 = sys.public_ipv4 ? [sys.public_ipv4] : [];
+  const pubV6 = sys.public_ipv6 ? [sys.public_ipv6] : [];
+  const total = v4s.length + v6s.length + pubV4.length + pubV6.length;
+
+  if (total === 0) {
+    $('#ipSummary').textContent = '未获取';
+    $('#ipSummary').title = '未能获取 IP 地址';
+    return;
+  }
+
+  // 顶栏摘要：显示第一个 IPv4，带数量统计
+  const first = v4s[0] || v6s[0] || pubV4[0] || pubV6[0] || '';
+  const summary = total === 1 ? first : first + ' +' + (total - 1);
+  $('#ipSummary').textContent = summary;
+  $('#ipSummary').title = '共 ' + total + ' 个 IP 地址，点击查看全部';
+
+  // 下拉列表
+  const v4List = $('#ipV4List');
+  const v6List = $('#ipV6List');
+  const pubList = $('#pubIpList');
+  v4List.innerHTML = '';
+  v6List.innerHTML = '';
+  pubList.innerHTML = '';
+  v4s.forEach(ip => appendIpRow(v4List, 'v4', 'v4', ip));
+  v6s.forEach(ip => appendIpRow(v6List, 'v6', 'v6', ip));
+  appendIpRow(pubList, 'v4公', 'pub', sys.public_ipv4);
+  appendIpRow(pubList, 'v6公', 'pub', sys.public_ipv6);
+
+  // 隐藏空分区
+  $('#ipV6List').parentElement.style.display = v6s.length ? '' : 'none';
+  $('#pubIpList').parentElement.style.display = (pubV4.length + pubV6.length) ? '' : 'none';
+}
+
+// 下拉显示/隐藏（点击触发器切换，点击外部关闭）
+function toggleIpDropdown(force) {
+  const trigger = $('#ipTrigger');
+  const drop = $('#ipDropdown');
+  const open = force !== undefined ? force : drop.classList.contains('hidden');
+  drop.classList.toggle('hidden', !open);
+  trigger.classList.toggle('open', open);
+}
+
 (async function init() {
   try { state.colos = await api('/api/colos'); } catch (_) {}
 
@@ -690,71 +775,3 @@ async function removeCron() {
       $('#proxyText').value = String(reader.result);
       $('#proxyFileName').textContent = f.name;
       updateProxyCount();
-    };
-    reader.onerror = () => toast('读取文件失败', 'err');
-    reader.readAsText(f);
-  });
-  $('#btnUploadAPI').onclick = uploadAPI;
-  $('#btnUploadGH').onclick = uploadGitHub;
-  $('#btnDownload').onclick = () => download('result');
-
-  $('#inIPFile').addEventListener('change', e => {
-    importIPFile(e.target.files && e.target.files[0]);
-    e.target.value = '';
-  });
-
-  $('#btnCron').onclick = openCron;
-  $('#btnCronClose').onclick = () => $('#cronMask').classList.add('hidden');
-  $('#cronMask').onclick = e => { if (e.target === $('#cronMask')) $('#cronMask').classList.add('hidden'); };
-  $('#btnCronAdd').onclick = addCron;
-  $('#cronArgs').addEventListener('input', e => {
-    e.target.dataset.edited = e.target.value.trim() ? '1' : '';
-    $('#btnCronSync').classList.toggle('hidden', !e.target.dataset.edited);
-  });
-  $('#btnCronSync').onclick = () => {
-    $('#cronArgs').value = buildCronArgs();
-    delete $('#cronArgs').dataset.edited;
-    $('#btnCronSync').classList.add('hidden');
-    toast('已按当前设置重新生成', 'ok');
-  };
-  $('#btnCronRemove').onclick = removeCron;
-  document.querySelectorAll('#cronPresets button').forEach(b => {
-    b.onclick = () => {
-      document.querySelectorAll('#cronPresets button').forEach(x => x.classList.remove('on'));
-      b.classList.add('on');
-      $('#cronSchedule').value = b.dataset.cron;
-    };
-  });
-  $('#cronSchedule').addEventListener('input', () => {
-    document.querySelectorAll('#cronPresets button').forEach(b =>
-      b.classList.toggle('on', b.dataset.cron === $('#cronSchedule').value.trim()));
-  });
-
-  try { state.system = await api('/api/system') || {}; } catch (_) {}
-  if (!state.system.cron_supported) $('#btnCron').classList.add('hidden');
-  
-  // 显示本机 IP
-  if (state.system.local_ipv4 || state.system.local_ipv6) {
-    const parts = [];
-    if (state.system.local_ipv4) parts.push('IPv4:' + state.system.local_ipv4);
-    if (state.system.local_ipv6) parts.push('IPv6:' + state.system.local_ipv6);
-    $('#ipDisplay').textContent = parts.join('  ');
-    $('#ipDisplay').title = '本机 IP 地址';
-  }
-  // 显示公网 IP
-  if (state.system.public_ipv4 || state.system.public_ipv6) {
-    const pubParts = [];
-    if (state.system.public_ipv4) pubParts.push('公网:' + state.system.public_ipv4);
-    if (state.system.public_ipv6) pubParts.push('IPv6:' + state.system.public_ipv6);
-    $('#pubIpDisplay').textContent = pubParts.join('  ');
-    $('#pubIpDisplay').title = '公网 IP 地址';
-  }
-
-  await loadConfig();
-  try {
-    const st = await api('/api/status');
-    if (st.running) { setRunning(true); }
-    if (st.count) { state.results = await api('/api/results'); renderTable(); }
-  } catch (_) {}
-  connectEvents();
-})();
