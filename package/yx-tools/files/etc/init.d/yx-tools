@@ -1,0 +1,53 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2024 byJoey
+
+START=85
+STOP=15
+
+START_MODE="web"
+START_ARGS=""
+
+get_config() {
+    uci -q get "yx-tools.$1.$2" 2>/dev/null
+}
+
+start_service() {
+    START_MODE=$(get_config global start_mode)
+    [ -z "$START_MODE" ] && START_MODE="web"
+    
+    START_ARGS=$(get_config global start_args)
+    
+    case "$START_MODE" in
+        web)
+            local listen_addr
+            listen_addr=$(get_config global listen_addr)
+            [ -z "$listen_addr" ] && listen_addr="0.0.0.0:8080"
+            
+            procd_open_instance
+            procd_set_param command /usr/bin/yx web -listen "$listen_addr" -no-open $START_ARGS
+            procd_set_param respawn 1000 10 3
+            procd_set_param env YX_DATA_DIR=/root/.yx-tools
+            procd_close_instance
+            ;;
+        test)
+            procd_open_instance
+            procd_set_param command /usr/bin/yx test $START_ARGS
+            procd_set_param respawn 0
+            procd_set_param env YX_DATA_DIR=/root/.yx-tools
+            procd_close_instance
+            ;;
+        *)
+            logger -t yx-tools "Unknown start mode: $START_MODE"
+            return 1
+            ;;
+    esac
+}
+
+stop_service() {
+    killall yx 2>/dev/null || true
+}
+
+reload_service() {
+    stop
+    start
+}
