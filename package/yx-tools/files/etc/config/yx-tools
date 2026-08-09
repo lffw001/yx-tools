@@ -1,0 +1,4 @@
+config global 'global'
+    option start_mode 'web'
+    option listen_addr '0.0.0.0:8080'
+    option start_args ''
