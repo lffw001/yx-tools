@@ -27,21 +27,39 @@ jobs:
           - x86_64
         include:
           - arch: aarch64_generic
-            binary: arm64
+            goos: linux
+            goarch: arm64
+            goarm: ""
           - arch: arm_cortex-a7-neon
-            binary: arm_7
+            goos: linux
+            goarch: arm
+            goarm: "7"
           - arch: arm_cortex-a9-vfpv3
-            binary: arm_8
+            goos: linux
+            goarch: arm
+            goarm: "8"
           - arch: mips_24kc
-            binary: mips
+            goos: linux
+            goarch: mips
+            goarm: ""
           - arch: mipsel_24kc
-            binary: mipsel
+            goos: linux
+            goarch: mipsle
+            goarm: ""
           - arch: x86_64
-            binary: amd64
+            goos: linux
+            goarch: amd64
+            goarm: ""
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
 
       - name: Get version
         id: version
@@ -54,55 +72,39 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Resolved version: $VERSION"
 
-      - name: Download binary
+      - name: Build binary
         run: |
           VERSION=${{ steps.version.outputs.version }}
-          BINARY=${{ matrix.binary }}
+          GOOS=${{ matrix.goos }}
+          GOARCH=${{ matrix.goarch }}
+          GOARM=${{ matrix.goarm }}
           ARCH=${{ matrix.arch }}
           
-          echo "Downloading binary for $ARCH ($BINARY) version $VERSION"
+          echo "Building binary for $ARCH (GOOS=$GOOS GOARCH=$GOARCH GOARM=$GOARM)"
           
-          # 下载 tar.gz 包
-          curl -L --max-time 60 "https://github.com/byJoey/yx-tools/releases/download/v${VERSION}/yx_linux_${BINARY}.tar.gz" -o yx.tar.gz 2>/dev/null
-          if [ -f yx.tar.gz ]; then
-            tar -xzf yx.tar.gz
-            rm yx.tar.gz
-          else
-            # 尝试下载 exe 文件
-            curl -L --max-time 60 "https://github.com/byJoey/yx-tools/releases/download/v${VERSION}/yx_linux_${BINARY}.exe" -o yx.exe 2>/dev/null
-            if [ -f yx.exe ]; then
-              mv yx.exe yx
-            else
-              echo "Error: Failed to download binary for $ARCH"
-              ls -la
-              exit 1
-            fi
+          # 设置编译参数
+          export CGO_ENABLED=0
+          export GOOS=$GOOS
+          export GOARCH=$GOARCH
+          if [ -n "$GOARM" ]; then
+            export GOARM=$GOARM
           fi
           
-          # 处理解压后的文件
-          if [ ! -f yx ] && ls yx-* >/dev/null 2>&1; then
-            mv yx-* yx
-          fi
-          if [ ! -f yx ] && ls yx* >/dev/null 2>&1; then
-            mv $(ls yx* | head -1) yx
-          fi
+          # 编译
+          go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o yx ./cmd/yx
           
-          # 检查二进制文件
-          if [ ! -f yx ]; then
-            echo "Error: Failed to download binary for $ARCH"
-            ls -la
-            exit 1
-          fi
-          
+          # 验证
           chmod +x yx
-          echo "Binary downloaded successfully:"
-          file yx || true
+          ./yx version || true
+          echo "Binary built successfully:"
+          ls -la yx
 
       - name: Setup package
         run: |
           VERSION=${{ steps.version.outputs.version }}
+          ARCH=${{ matrix.arch }}
           
-          echo "Setting up OpenWrt package for version $VERSION"
+          echo "Setting up OpenWrt package for $ARCH version $VERSION"
           
           # 创建目录结构
           mkdir -p package/yx-tools/files/www
