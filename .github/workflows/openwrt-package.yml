@@ -24,6 +24,7 @@ jobs:
       matrix:
         arch:
           - aarch64_generic
+          - aarch64_cortex-a53
           - arm_cortex-a7-neon
           - arm_cortex-a9-vfpv3
           - mips_24kc
@@ -31,6 +32,10 @@ jobs:
           - x86_64
         include:
           - arch: aarch64_generic
+            goos: linux
+            goarch: arm64
+            goarm: ""
+          - arch: aarch64_cortex-a53
             goos: linux
             goarch: arm64
             goarm: ""
