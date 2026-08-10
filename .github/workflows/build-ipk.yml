@@ -23,17 +23,21 @@ jobs:
           mkdir -p sdk
           echo "Downloading SDK from $SDK_URL"
           
-          # 重试3次下载，每次间隔10秒
-          for attempt in 1 2 3; do
-            echo "Download attempt $attempt/3..."
-            if wget -q --timeout=30 --tries=1 -O sdk/openwrt-sdk.tar.xz "$SDK_URL"; then
+          # 重试5次下载，每次间隔10秒，超时60秒
+          for attempt in 1 2 3 4 5; do
+            echo "Download attempt $attempt/5..."
+            if curl -L --connect-timeout 60 --max-time 300 --retry 0 -o sdk/openwrt-sdk.tar.xz "$SDK_URL"; then
               echo "Download successful"
               break
-            elif [ $attempt -lt 3 ]; then
+            elif [ $attempt -lt 5 ]; then
               echo "Download failed, waiting 10 seconds before retry..."
               sleep 10
             else
-              echo "Download failed after 3 attempts"
+              echo "Download failed after 5 attempts"
+              echo "Checking if file was partially downloaded..."
+              if [ -f sdk/openwrt-sdk.tar.xz ]; then
+                ls -lh sdk/openwrt-sdk.tar.xz
+              fi
               exit 1
             fi
           done
@@ -46,6 +50,11 @@ jobs:
           
           file_size=$(stat -c%s sdk/openwrt-sdk.tar.xz 2>/dev/null || stat -f%z sdk/openwrt-sdk.tar.xz 2>/dev/null || echo 0)
           echo "Downloaded file size: $file_size bytes"
+          
+          # 验证文件完整性
+          if [ "$file_size" -lt 1000000 ]; then
+            echo "Warning: File size seems too small, might be incomplete"
+          fi
           
           tar -C sdk -xJf sdk/openwrt-sdk.tar.xz --strip-components=0
           ls -la sdk
