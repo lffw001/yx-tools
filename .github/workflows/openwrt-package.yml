@@ -1,5 +1,8 @@
 name: Build OpenWrt Package
 
+permissions:
+  contents: write
+
 on:
   push:
     tags:
@@ -63,6 +66,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -342,6 +347,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -366,22 +373,11 @@ jobs:
 
       - name: Create Release (manual trigger)
         if: github.event_name == 'workflow_dispatch'
-        run: |
-          TAG="v${{ github.event.inputs.version }}"
-          echo "Creating release for tag: $TAG"
-          
-          # 配置 git
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          
-          # 创建并推送标签
-          git tag "$TAG"
-          git push origin "$TAG"
-          
-          # 使用 GitHub CLI 创建 release
-          gh release create "$TAG" \
-            --title "Release $TAG" \
-            --generate-notes \
-            artifacts/**/*.ipk
+        uses: actions/create-release@v1
+        with:
+          tag_name: v${{ github.event.inputs.version }}
+          release_name: v${{ github.event.inputs.version }}
+          body: "Release v${{ github.event.inputs.version }}"
+          files: artifacts/**/*.ipk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
