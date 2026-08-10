@@ -1,102 +1,32 @@
-name: Build OpenWrt IPK artifacts
-
-on:
-  workflow_dispatch:
-
-jobs:
-  build-ipks:
-    runs-on: ubuntu-latest
-    env:
-      SDK_URL: "https://downloads.openwrt.org/releases/23.05.4/targets/x86/64/openwrt-sdk-23.05.4-x86-64_gcc-11.3.0_musl.Linux-x86_64.tar.xz"
-      PACKAGE_DIR: "package"
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install prerequisites
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xz-utils build-essential libncurses5-dev zlib1g-dev gawk subversion git ccache curl
-
-      - name: Download and extract OpenWrt SDK
-        run: |
-          mkdir -p sdk
-          echo "Downloading SDK from $SDK_URL"
-          
-          # 重试3次下载，每次间隔10秒
-          for attempt in 1 2 3; do
-            echo "Download attempt $attempt/3..."
-            if wget -q --timeout=30 --tries=1 -O sdk/openwrt-sdk.tar.xz "$SDK_URL"; then
-              echo "Download successful"
-              break
-            elif [ $attempt -lt 3 ]; then
-              echo "Download failed, waiting 10 seconds before retry..."
-              sleep 10
-            else
-              echo "Download failed after 3 attempts"
-              exit 1
-            fi
-          done
-          
-          # 验证文件
-          if [ ! -f sdk/openwrt-sdk.tar.xz ]; then
-            echo "Error: SDK file not found"
-            exit 1
-          fi
-          
-          file_size=$(stat -c%s sdk/openwrt-sdk.tar.xz 2>/dev/null || stat -f%z sdk/openwrt-sdk.tar.xz 2>/dev/null || echo 0)
-          echo "Downloaded file size: $file_size bytes"
-          
-          tar -C sdk -xJf sdk/openwrt-sdk.tar.xz --strip-components=0
-          ls -la sdk
-
-      - name: Copy package into SDK
-        run: |
-          SDK_ROOT=$(find sdk -maxdepth 1 -type d -name 'openwrt-sdk*' -print -quit)
-          if [ -z "$SDK_ROOT" ]; then SDK_ROOT=$(find sdk -maxdepth 2 -type d -name 'staging_dir' -print -quit | xargs -I{} dirname {}); fi
-          echo "SDK_ROOT=$SDK_ROOT"
-          mkdir -p "$SDK_ROOT/package/local"
-          cp -r ${PACKAGE_DIR}/yx-tools "$SDK_ROOT/package/"
-          cp -r ${PACKAGE_DIR}/luci-app-yx-tools "$SDK_ROOT/package/" || true
-          ls -la "$SDK_ROOT/package"
-        shell: bash
-
-      - name: Prepare SDK feeds and config
-        working-directory: ${{ github.workspace }}/sdk
-        run: |
-          SDK_ROOT=$(find . -maxdepth 2 -type d -name 'openwrt-sdk*' -print -quit)
-          cd "$SDK_ROOT"
-          ./scripts/feeds update -a || true
-          ./scripts/feeds install -a || true
-          # create a minimal config to allow package compilation
-          make defconfig || true
-        shell: bash
-
-      - name: Compile packages
-        working-directory: ${{ github.workspace }}/sdk
-        run: |
-          SDK_ROOT=$(find . -maxdepth 2 -type d -name 'openwrt-sdk*' -print -quit)
-          cd "$SDK_ROOT"
-          # compile both packages; V=s for verbose
-          make package/yx-tools/compile V=s || true
-          make package/luci-app-yx-tools/compile V=s || true
-        shell: bash
-
-      - name: Find built IPKs
-        working-directory: ${{ github.workspace }}/sdk
-        run: |
-          SDK_ROOT=$(find . -maxdepth 2 -type d -name 'openwrt-sdk*' -print -quit)
-          cd "$SDK_ROOT"
-          echo "Searching for ipk files under $(pwd)/bin"
-          find . -path "./bin/packages/*/*/*.ipk" -type f -print > ipk_list.txt || true
-          echo "--- ipk_list.txt ---"
-          cat ipk_list.txt || true
-        shell: bash
-
-      - name: Upload built IPKs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: openwrt-ipk-artifacts
-          path: |
-            sdk/**/bin/packages/**/*.ipk
+- name: Download and extract OpenWrt SDK
+  run: |
+    mkdir -p sdk
+    echo "Downloading SDK from $SDK_URL"
+    
+    # 重试3次下载，每次间隔10秒
+    for attempt in 1 2 3; do
+      echo "Download attempt $attempt/3..."
+      # 移除 -q 标志以显示错误信息
+      if wget --timeout=30 --tries=1 -O sdk/openwrt-sdk.tar.xz "$SDK_URL"; then
+        echo "Download successful"
+        break
+      elif [ $attempt -lt 3 ]; then
+        echo "Download failed, waiting 10 seconds before retry..."
+        sleep 10
+      else
+        echo "Download failed after 3 attempts"
+        exit 1
+      fi
+    done
+    
+    # 验证文件
+    if [ ! -f sdk/openwrt-sdk.tar.xz ]; then
+      echo "Error: SDK file not found"
+      exit 1
+    fi
+    
+    file_size=$(stat -c%s sdk/openwrt-sdk.tar.xz 2>/dev/null || stat -f%z sdk/openwrt-sdk.tar.xz 2>/dev/null || echo 0)
+    echo "Downloaded file size: $file_size bytes"
+    
+    tar -C sdk -xJf sdk/openwrt-sdk.tar.xz --strip-components=0
+    ls -la sdk
