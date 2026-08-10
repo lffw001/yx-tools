@@ -340,17 +340,35 @@ jobs:
         with:
           path: artifacts
 
-      - name: List artifacts
-        run: |
-          echo "Available packages:"
-          find artifacts -name "*.ipk" -type f
-
-      - name: Create Release
+      - name: Create Release (tag trigger)
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v1
         with:
           files: artifacts/**/*.ipk
           draft: false
           prerelease: false
           generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Release (manual trigger)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          TAG="v${{ github.event.inputs.version }}"
+          echo "Creating release for tag: $TAG"
+          
+          # 配置 git
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          # 创建并推送标签
+          git tag "$TAG"
+          git push origin "$TAG"
+          
+          # 使用 GitHub CLI 创建 release
+          gh release create "$TAG" \
+            --title "Release $TAG" \
+            --generate-notes \
+            artifacts/**/*.ipk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
