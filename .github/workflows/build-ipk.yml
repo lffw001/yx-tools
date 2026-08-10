@@ -16,13 +16,37 @@ jobs:
       - name: Install prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y xz-utils build-essential libncurses5-dev zlib1g-dev gawk subversion git ccache
+          sudo apt-get install -y xz-utils build-essential libncurses5-dev zlib1g-dev gawk subversion git ccache curl
 
       - name: Download and extract OpenWrt SDK
         run: |
           mkdir -p sdk
           echo "Downloading SDK from $SDK_URL"
-          wget -qO sdk/openwrt-sdk.tar.xz "$SDK_URL"
+          
+          # 重试3次下载，每次间隔10秒
+          for attempt in 1 2 3; do
+            echo "Download attempt $attempt/3..."
+            if wget -q --timeout=30 --tries=1 -O sdk/openwrt-sdk.tar.xz "$SDK_URL"; then
+              echo "Download successful"
+              break
+            elif [ $attempt -lt 3 ]; then
+              echo "Download failed, waiting 10 seconds before retry..."
+              sleep 10
+            else
+              echo "Download failed after 3 attempts"
+              exit 1
+            fi
+          done
+          
+          # 验证文件
+          if [ ! -f sdk/openwrt-sdk.tar.xz ]; then
+            echo "Error: SDK file not found"
+            exit 1
+          fi
+          
+          file_size=$(stat -c%s sdk/openwrt-sdk.tar.xz 2>/dev/null || stat -f%z sdk/openwrt-sdk.tar.xz 2>/dev/null || echo 0)
+          echo "Downloaded file size: $file_size bytes"
+          
           tar -C sdk -xJf sdk/openwrt-sdk.tar.xz --strip-components=0
           ls -la sdk
 
