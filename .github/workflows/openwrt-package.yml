@@ -335,10 +335,18 @@ jobs:
       startsWith(github.ref, 'refs/tags/v') || 
       (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+
+      - name: List artifacts
+        run: |
+          echo "Available packages:"
+          find artifacts -name "*.ipk" -type f
 
       - name: Create Release (tag trigger)
         if: startsWith(github.ref, 'refs/tags/v')
