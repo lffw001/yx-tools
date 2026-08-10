@@ -31,9 +31,11 @@ endef
 
 define Package/$(PKG_NAME)/install
 	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/controller
-	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/model/cbi/yx-tools
+	# Install CBI model into the root of model/cbi (NOT a subdirectory).
+	# LuCI's cbi("yx_tools") expects /usr/lib/lua/luci/model/cbi/yx_tools.lua
+	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/model/cbi
 	$(INSTALL_DATA) ./luasrc/controller/*.lua $(1)/usr/lib/lua/luci/controller/
-	$(INSTALL_DATA) ./luasrc/model/cbi/yx_tools.lua $(1)/usr/lib/lua/luci/model/cbi/yx-tools/
+	$(INSTALL_DATA) ./luasrc/model/cbi/yx_tools.lua $(1)/usr/lib/lua/luci/model/cbi/yx_tools.lua
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/yx-tools
 	$(CP) ./htdocs/* $(1)/www/luci-static/resources/yx-tools/ || true
 endef
